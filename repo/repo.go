@@ -3,6 +3,7 @@ package repo
 import (
 	"fmt"
 	"math"
+	"sync"
 
 	"github.com/mroobert/concurrency-app/db"
 	"github.com/mroobert/concurrency-app/models"
@@ -12,6 +13,7 @@ import (
 type repo struct {
 	products *db.ProductDB
 	orders   *db.OrderDB
+	mutex    sync.Mutex
 }
 
 // Repo is the interface we expose to outside packages
@@ -67,6 +69,8 @@ func (r *repo) validateItem(item models.Item) error {
 }
 
 func (r *repo) processOrders(order *models.Order) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	r.processOrder(order)
 	r.orders.Upsert(*order)
 	fmt.Printf("Processing order %s completed\n", order.ID)
