@@ -3,7 +3,6 @@ package repo
 import (
 	"fmt"
 	"math"
-	"sync"
 
 	"github.com/mroobert/concurrency-app/db"
 	"github.com/mroobert/concurrency-app/models"
@@ -13,7 +12,7 @@ import (
 type repo struct {
 	products *db.ProductDB
 	orders   *db.OrderDB
-	mutex    sync.Mutex
+	incoming chan models.Order
 }
 
 // Repo is the interface we expose to outside packages
@@ -32,7 +31,12 @@ func New() (Repo, error) {
 	o := repo{
 		products: p,
 		orders:   db.NewOrders(),
+		incoming: make(chan models.Order),
 	}
+
+	// start the go routine which will process the orders
+	go o.processOrders()
+
 	return &o, nil
 }
 
@@ -53,7 +57,9 @@ func (r *repo) CreateOrder(item models.Item) (*models.Order, error) {
 	}
 	order := models.NewOrder(item)
 	r.orders.Upsert(order)
-	r.processOrders(&order)
+
+	// place the order on the incoming orders channel
+	r.incoming <- order
 	return &order, nil
 }
 
@@ -68,12 +74,14 @@ func (r *repo) validateItem(item models.Item) error {
 	return nil
 }
 
-func (r *repo) processOrders(order *models.Order) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	r.processOrder(order)
-	r.orders.Upsert(*order)
-	fmt.Printf("Processing order %s completed\n", order.ID)
+func (r *repo) processOrders() {
+	fmt.Println("Order processing started!")
+	for order := range r.incoming {
+		r.processOrder(&order)
+		r.orders.Upsert(order)
+		fmt.Printf("Processing order %s completed\n", order.ID)
+	}
+	fmt.Println("Order processing stopped!")
 }
 
 // processOrder is an internal method which completes or rejects an order
