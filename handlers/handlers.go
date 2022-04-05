@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/mux"
 	"github.com/mroobert/concurrency-app/models"
@@ -12,6 +13,7 @@ import (
 
 type handler struct {
 	repo repo.Repo
+	once sync.Once
 }
 
 type Handler interface {
@@ -19,6 +21,7 @@ type Handler interface {
 	ProductIndex(w http.ResponseWriter, r *http.Request)
 	OrderShow(w http.ResponseWriter, r *http.Request)
 	OrderInsert(w http.ResponseWriter, r *http.Request)
+	Close(w http.ResponseWriter, r *http.Request)
 }
 
 func New() (Handler, error) {
@@ -73,4 +76,16 @@ func (h *handler) OrderInsert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeResponse(w, http.StatusOK, order, nil)
+}
+
+// Close closes the orders app for new orders
+func (h *handler) Close(w http.ResponseWriter, r *http.Request) {
+	h.invokeClose()
+	writeResponse(w, http.StatusOK, "The Orders App is now closed!", nil)
+}
+
+func (h *handler) invokeClose() {
+	h.once.Do(func() {
+		h.repo.Close()
+	})
 }
